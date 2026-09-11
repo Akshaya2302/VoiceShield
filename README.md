@@ -1,49 +1,125 @@
-# VoiceShield 🛡️🎙️
-**SIH26104 - Smart India Hackathon**
-*Team: Temperature Zero*
+# VoiceShield
 
-## 📖 Overview
-VoiceShield is an advanced, real-time voice cloning detection and impersonation prevention system. Built specifically to intercept fraudulent VoIP and WhatsApp calls, VoiceShield achieves a sub-300ms inference pipeline to catch synthetic voices before the scammer finishes their first sentence.
+**Smart India Hackathon 2026 — Problem Statement SIH26104**
+**Team:** Temperature Zero
 
-Unlike traditional solutions that rely on passive file uploads, VoiceShield intercepts audio via live WebSockets and features an automated **Action Engine** to lock down transactions and issue Out-of-Band MFA challenges the moment a threat is detected.
+VoiceShield is a browser-based prototype for demonstrating real-time voice-cloning impersonation detection and fraud-containment workflows. It pairs a microphone-enabled frontend with a FastAPI WebSocket backend that returns a simulated impersonation-risk assessment.
 
-## ✨ Key Features (Unique Selling Propositions)
-- **Live WebSocket Interception:** Sub-300ms streaming architecture built for live calls, not MP3 file uploads.
-- **Ensemble AI Pipeline:** Designed to leverage both spectral analysis (ResNet) to catch visual vocoder flaws, and acoustic analysis (Wav2Vec 2.0) to track vocal tract anomalies.
-- **Automated Fraud Containment:** Automatically freezes sensitive UI transactions and issues simulated Twilio Step-Up MFA when risk exceeds 75%.
-- **Next-Gen Security Modules:**
-  - **Room Echo Profiling:** Verifies natural physical room acoustics.
-  - **Vocal Tract Tracking:** Tracks mathematical shifting of vocal cord dimensions.
-  - **Acoustic CAPTCHA:** Issues dynamic whispered prompts that AI deepfakes cannot instantly generate.
+## What works today
 
-## 🛠️ Tech Stack
-- **Frontend:** HTML5, Tailwind CSS, Vanilla JavaScript, Web Audio API
-- **Backend:** Python, FastAPI, Uvicorn (ASGI)
-- **Communication:** WebSockets for real-time bi-directional streaming
+- Live browser microphone access and frequency visualisation
+- WebSocket connection between the frontend and FastAPI backend
+- Simulated safe/threat risk scores and inference logs
+- Threat-state UI with simulated transaction freeze, MFA, room-echo, vocal-tract, and acoustic-CAPTCHA flows
+- FastAPI health endpoint at `/`
 
-## 🚀 How to Run the Prototype
+> This is a hackathon prototype. The backend receives JSON control payloads rather than raw audio and deliberately simulates model inference; it does not make real fraud, identity, or authentication decisions.
 
-### 1. Start the Backend
-Navigate to the `backend` directory, install dependencies, and start the high-speed Uvicorn server:
-```bash
+## Architecture
+
+```text
+Browser microphone + UI
+        |
+        | WebSocket: ws://localhost:8000/ws/stream
+        v
+FastAPI / Uvicorn backend
+        |
+        v
+Simulated risk score + status + audit-style logs
+        |
+        v
+Browser containment and CAPTCHA demonstration
+```
+
+## Tech stack
+
+- **Frontend:** HTML5, Tailwind CSS (CDN), vanilla JavaScript, Web Audio API
+- **Backend:** Python, FastAPI, Pydantic v2, Uvicorn
+- **Streaming:** WebSockets served by Uvicorn
+
+## Prerequisites
+
+- Python 3.10 or later (the included virtual environment uses Python 3.14)
+- A current Chrome or Edge browser with microphone permission
+
+No FFmpeg, CUDA, PyTorch, database, or external API credentials are required for the current prototype. See [SYSTEM_DEPENDENCIES.md](SYSTEM_DEPENDENCIES.md) for platform notes.
+
+## Run locally
+
+The project already includes a virtual environment. Activate and use it; do not recreate it.
+
+### 1. Start the backend
+
+From the project root:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
 cd backend
-pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-### 2. Launch the Frontend
-Simply open `frontend/index.html` in any modern web browser (Google Chrome or Edge recommended). 
-*(You can use the VS Code "Live Server" extension for the best experience).*
+The API will be available at <http://127.0.0.1:8000>. Opening that address should return:
 
-### 3. Demo Instructions (The "Wizard of Oz" Flow)
-Because running 10GB PyTorch models requires enterprise GPUs, this prototype simulates the inference engine to demonstrate the UI and WebSocket architecture perfectly on standard laptops.
-1. Click **Live Audio Call Monitoring**.
-2. **For Safe Human Voice:** Talk normally. The system will verify the voice automatically.
-3. **For Threat Detection:** Secretly hold down the `Shift` key on your keyboard while audio is playing. The system will instantly detect the deepfake, trigger the Action Engine, and await an Acoustic CAPTCHA challenge.
+```json
+{"message":"VoiceShield AI Agent API is running"}
+```
 
-## ⚠️ Disclaimer
-This repository contains the UI/UX and architectural WebSocket pipeline prototype built for the SIH hackathon. The final PyTorch AI inference models are simulated here due to strict local hardware constraints.
+### 2. Start the frontend
 
-## 👥 Team
-- **Team Name:** Temperature Zero
-- **Problem Statement:** SIH26104
+Open `frontend/index.html` in Chrome or Edge. For the most reliable microphone support, serve the project through a local development server (for example, VS Code Live Server) so it runs on `localhost`.
+
+### 3. Try the demo
+
+1. Select **Live Audio Call Monitoring** and allow microphone access.
+2. Speak normally to receive the simulated **SAFE** response.
+3. Hold the `Shift` key while the call is active to trigger the simulated **THREAT** response and containment flow.
+4. Use the acoustic CAPTCHA control to display the challenge outcome.
+
+## API reference
+
+### `GET /`
+
+Returns an application health message.
+
+### `WS /ws/stream`
+
+Accepts a text JSON message. The prototype recognizes `is_scam`:
+
+```json
+{"is_scam": true}
+```
+
+It responds with a JSON object containing `status`, `risk_score`, `stage`, and `logs`. A threat response has a score above 75; a safe response is below 20.
+
+## Configuration
+
+The current source code does not read environment variables or require secrets. [.env.example](.env.example) is intentionally empty of credentials and is ready for future integrations.
+
+## Planned SIH architecture (not implemented yet)
+
+The SIH concept presentation describes the following future components. They are not part of the current source code or dependency set:
+
+- 2-second rolling, 16 kHz raw-audio buffers
+- DSP feature extraction: Mel spectrograms, MFCCs, pitch, and acoustic features
+- Wav2Vec 2.0 and CNN/ResNet deepfake inference
+- Speech-to-text and scam/urgency/extortion keyword analysis
+- Real Twilio or other step-up MFA integration
+- SHA-256 audit evidence, database persistence, and blockchain integration
+- Real transaction containment and production-grade fraud decisions
+
+## Repository layout
+
+```text
+backend/
+  main.py                 FastAPI application and WebSocket simulation
+  requirements.txt        Backend runtime dependencies
+frontend/
+  index.html              Browser dashboard and microphone demo
+SYSTEM_DEPENDENCIES.md    Non-Python prerequisites and future-component notes
+.env.example              Credential template for future integrations
+```
+
+## Safety note
+
+VoiceShield is a demonstration project, not a production fraud-prevention service. Validate models, security controls, data handling, authentication, consent, and accessibility before any real-world deployment.
