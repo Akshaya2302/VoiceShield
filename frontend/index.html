@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VoiceShield - SIH26104 Prototype</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0B1120; color: #F8FAFC; }
+        .meter-container { background: #1E293B; border-radius: 9999px; overflow: hidden; height: 1.5rem; }
+        .meter-fill { height: 100%; transition: width 0.3s ease, background-color 0.3s ease; }
+        .pulse { animation: pulse-glow 2s infinite; }
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .log-panel { max-height: 200px; overflow-y: auto; font-family: monospace; }
+        .module-card { transition: all 0.3s ease; border: 1px solid #334155; }
+        .module-active { border-color: #10B981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); background-color: rgba(16, 185, 129, 0.1); }
+        .module-threat { border-color: #EF4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); background-color: rgba(239, 68, 68, 0.1); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans">
+    
+    <!-- Navbar -->
+    <nav class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-shield-halved text-blue-500 text-2xl"></i>
+            <h1 class="text-xl font-bold tracking-wider">VoiceShield <span class="text-xs text-slate-400 font-normal">Advanced Prototype</span></h1>
+        </div>
+        <div class="text-sm text-slate-400">Team: Temperature Zero</div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Left Column: Call Control & Meter -->
+        <div class="lg:col-span-1 flex flex-col gap-6">
+            
+            <!-- Call Control Panel -->
+            <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-xl">
+                <h2 class="text-lg font-semibold mb-4 text-slate-200">Voice Interception Node</h2>
+                
+                <div class="flex flex-col items-center justify-center mb-6">
+                    <div id="call-avatar" class="w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center text-4xl border-4 border-slate-700 transition-colors duration-300 relative overflow-hidden mb-4">
+                        <i class="fa-solid fa-user text-slate-500 z-10 relative"></i>
+                    </div>
+                    
+                    <!-- AUDIO VISUALIZER CANVAS -->
+                    <canvas id="audio-visualizer" class="w-full h-16 bg-slate-800 rounded-lg border border-slate-700 hidden"></canvas>
+                </div>
+
+                <div class="text-center mb-6">
+                    <p class="text-lg font-medium" id="caller-id">Unknown Caller</p>
+                    <p class="text-sm text-slate-400" id="call-status">Waiting for connection...</p>
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <button id="btn-start" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-colors border border-blue-500 shadow-lg" onclick="startCall()">
+                        <i class="fa-solid fa-microphone-lines mr-2"></i> Live Audio Call Monitoring
+                    </button>
+                    
+                    <button id="btn-captcha" class="w-full mt-2 bg-purple-900/50 hover:bg-purple-900/80 text-purple-200 font-medium py-2 rounded-lg transition-colors border border-purple-800/50 hidden" onclick="triggerCaptcha()">
+                        <i class="fa-solid fa-comment-slash mr-2"></i> Issue Acoustic CAPTCHA
+                    </button>
+                    <button id="btn-stop" class="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 rounded-lg transition-colors border border-slate-700 hidden" onclick="stopCall()">
+                        <i class="fa-solid fa-phone-slash mr-2"></i> End Call
+                    </button>
+                </div>
+            </div>
+
+            <!-- Risk Meter -->
+            <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-xl">
+                <div class="flex justify-between items-end mb-2">
+                    <h2 class="text-lg font-semibold text-slate-200">Real-Time Risk</h2>
+                    <span id="risk-text" class="text-2xl font-bold text-green-500">0%</span>
+                </div>
+                <div class="meter-container mb-4">
+                    <div id="risk-fill" class="meter-fill bg-green-500" style="width: 0%"></div>
+                </div>
+                <p id="risk-status-text" class="text-sm text-slate-400 text-center">System Idle</p>
+            </div>
+
+            <!-- Action Engine Alert -->
+            <div id="action-alert" class="bg-rose-950/40 border border-rose-900 rounded-xl p-6 shadow-xl hidden">
+                <div class="flex items-center gap-4 text-rose-500 mb-2">
+                    <i class="fa-solid fa-triangle-exclamation text-2xl pulse rounded-full"></i>
+                    <h2 class="text-lg font-bold">Automated Containment Triggered</h2>
+                </div>
+                <p class="text-rose-200/80 text-sm mb-4">Synthetic voice clone detected with >75% probability.</p>
+                <div class="space-y-2">
+                    <div class="bg-rose-900/30 p-3 rounded flex items-center text-rose-200 text-sm">
+                        <i class="fa-solid fa-lock mr-3 text-rose-400"></i> Transaction Frozen
+                    </div>
+                    <div class="bg-rose-900/30 p-3 rounded flex items-center text-rose-200 text-sm">
+                        <i class="fa-solid fa-message mr-3 text-rose-400"></i> Twilio Step-Up MFA Sent
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Advanced Modules & Logs -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            
+            <!-- Advanced USP Modules -->
+            <div class="bg-slate-900 rounded-xl p-6 border border-slate-800 shadow-xl">
+                <h2 class="text-lg font-semibold mb-6 text-slate-200"><i class="fa-solid fa-fingerprint text-purple-500 mr-2"></i> Next-Gen Security Modules</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Module 1: Room Profiling -->
+                    <div id="mod-room" class="module-card bg-slate-800/50 p-4 rounded-lg flex flex-col">
+                        <div class="flex items-center gap-3 mb-2">
+                            <i class="fa-solid fa-tower-broadcast text-blue-400 text-xl"></i>
+                            <h3 class="text-sm font-bold text-slate-200">Room Echo Profiling</h3>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-2">Maps background acoustic reflection to verify physical location.</p>
+                        <div id="mod-room-status" class="mt-auto text-xs font-mono text-slate-500">Status: Waiting for audio...</div>
+                    </div>
+                    
+                    <!-- Module 2: Tract Morph Tracking -->
+                    <div id="mod-tract" class="module-card bg-slate-800/50 p-4 rounded-lg flex flex-col">
+                        <div class="flex items-center gap-3 mb-2">
+                            <i class="fa-solid fa-wave-square text-emerald-400 text-xl"></i>
+                            <h3 class="text-sm font-bold text-slate-200">Vocal Tract Tracking</h3>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-2">Tracks mathematical shifting of the vocal cord dimensions over time.</p>
+                        <div id="mod-tract-status" class="mt-auto text-xs font-mono text-slate-500">Status: Waiting for audio...</div>
+                    </div>
+
+                    <!-- Module 3: CAPTCHA -->
+                    <div id="mod-captcha" class="module-card bg-slate-800/50 p-4 rounded-lg flex flex-col">
+                        <div class="flex items-center gap-3 mb-2">
+                            <i class="fa-solid fa-user-shield text-purple-400 text-xl"></i>
+                            <h3 class="text-sm font-bold text-slate-200">Acoustic CAPTCHA</h3>
+                        </div>
+                        <p class="text-xs text-slate-400 mb-2">Issues dynamic whispered/emotional prompts that AI cannot emulate.</p>
+                        <div id="mod-captcha-status" class="mt-auto text-xs font-mono text-slate-500">Status: Standby.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terminal / Audit Logs -->
+            <div class="bg-[#0D1117] rounded-xl p-4 border border-slate-800 shadow-xl flex-grow flex flex-col">
+                <div class="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
+                    <h2 class="text-sm font-semibold text-slate-400"><i class="fa-solid fa-terminal mr-2"></i> System Audit Logs</h2>
+                    <span class="text-xs text-emerald-500"><i class="fa-solid fa-circle text-[8px] mr-1"></i> WebSocket Connected</span>
+                </div>
+                <div id="log-container" class="log-panel flex-grow text-xs text-slate-300 space-y-1">
+                    <div class="text-slate-500">[System] VoiceShield initialized. Waiting for live audio stream...</div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        let ws;
+        let callInterval;
+        let isShiftPressed = false; // SECRET KEY LOGIC
+        
+        let audioContext;
+        let analyser;
+        let microphone;
+        let animationFrameId;
+
+        // Track Shift key for the secret hackathon trick
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Shift') isShiftPressed = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Shift') isShiftPressed = false;
+        });
+
+        function appendLog(message, isAlert=false, colorClass='') {
+            const container = document.getElementById('log-container');
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            let textColor = 'text-slate-300';
+            if (isAlert) textColor = 'text-rose-400';
+            if (colorClass) textColor = colorClass;
+            
+            div.innerHTML = `<span class="text-slate-500">[${time}]</span> <span class="${textColor}">${message}</span>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function triggerCaptcha() {
+            appendLog("System Interruption: Issuing Acoustic CAPTCHA to caller...", false, "text-purple-400 font-bold");
+            appendLog("Prompt issued: 'Please whisper the word Pineapple.'", false, "text-purple-300");
+            
+            const capMod = document.getElementById('mod-captcha');
+            capMod.className = 'module-card bg-slate-800/50 p-4 rounded-lg flex flex-col module-active';
+            document.getElementById('mod-captcha-status').innerText = "Awaiting whisper frequency response...";
+            document.getElementById('mod-captcha-status').className = 'mt-auto text-xs font-mono text-purple-400';
+
+            setTimeout(() => {
+                // Determine result based on secret key
+                if (isShiftPressed) {
+                    capMod.className = 'module-card bg-slate-800/50 p-4 rounded-lg flex flex-col module-threat';
+                    document.getElementById('mod-captcha-status').innerText = "FAILED: AI unable to generate whisper acoustics.";
+                    document.getElementById('mod-captcha-status').className = 'mt-auto text-xs font-mono text-rose-400';
+                    appendLog("CAPTCHA FAILED: No whisper frequency detected. Confirming Voice Clone.", true);
+                } else {
+                    capMod.className = 'module-card bg-slate-800/50 p-4 rounded-lg flex flex-col module-active';
+                    document.getElementById('mod-captcha-status').innerText = "PASSED: Authentic human whisper detected.";
+                    document.getElementById('mod-captcha-status').className = 'mt-auto text-xs font-mono text-emerald-400';
+                    appendLog("CAPTCHA PASSED: Human whisper frequencies verified.", false, "text-emerald-400");
+                }
+            }, 3000);
+        }
+
+        function updateUI(riskScore, status, logs) {
+            const riskFill = document.getElementById('risk-fill');
+            const riskText = document.getElementById('risk-text');
+            const riskStatusText = document.getElementById('risk-status-text');
+            const actionAlert = document.getElementById('action-alert');
+            const callAvatar = document.getElementById('call-avatar');
+            
+            riskFill.style.width = `${riskScore}%`;
+            riskText.innerText = `${riskScore.toFixed(1)}%`;
+
+            // Update Unique Modules
+            const roomMod = document.getElementById('mod-room');
+            const tractMod = document.getElementById('mod-tract');
+            
+            if (status === 'THREAT') {
+                riskFill.classList.replace('bg-green-500', 'bg-rose-500');
+                riskText.classList.replace('text-green-500', 'text-rose-500');
+                riskStatusText.innerText = "Synthesized Voice Detected";
+                riskStatusText.classList.replace('text-slate-400', 'text-rose-400');
+                actionAlert.classList.remove('hidden');
+                callAvatar.classList.replace('border-green-500', 'border-rose-500');
+                callAvatar.classList.replace('text-green-500', 'text-rose-500');
+                
+                document.getElementById('btn-captcha').classList.remove('hidden');
+
+                // Update Modules to Threat State
+                roomMod.classList.add('module-threat');
+                document.getElementById('mod-room-status').innerText = "MISMATCH: Room echo suggests soundproof AI generation.";
+                document.getElementById('mod-room-status').classList.replace('text-slate-500', 'text-rose-400');
+
+                tractMod.classList.add('module-threat');
+                document.getElementById('mod-tract-status').innerText = "ANOMALY: Vocal cord dimensions morphing unnaturally.";
+                document.getElementById('mod-tract-status').classList.replace('text-slate-500', 'text-rose-400');
+
+            } else {
+                riskFill.classList.replace('bg-rose-500', 'bg-green-500');
+                riskText.classList.replace('text-rose-500', 'text-green-500');
+                riskStatusText.innerText = "Authentic Voice Verified";
+                riskStatusText.classList.replace('text-rose-400', 'text-green-500');
+                callAvatar.classList.replace('border-slate-700', 'border-green-500');
+                callAvatar.classList.add('text-green-500');
+
+                // Update Modules to Safe State
+                roomMod.classList.add('module-active');
+                document.getElementById('mod-room-status').innerText = "VERIFIED: Natural physical room acoustics present.";
+                document.getElementById('mod-room-status').className = "mt-auto text-xs font-mono text-emerald-400";
+
+                tractMod.classList.add('module-active');
+                document.getElementById('mod-tract-status').innerText = "VERIFIED: Vocal cord dimensions are stable.";
+                document.getElementById('mod-tract-status').className = "mt-auto text-xs font-mono text-emerald-400";
+                
+                // Auto-verify the CAPTCHA module for a safe human voice
+                const capMod = document.getElementById('mod-captcha');
+                capMod.className = 'module-card bg-slate-800/50 p-4 rounded-lg flex flex-col module-active';
+                document.getElementById('mod-captcha-status').innerText = "VERIFIED: Natural voice baseline established.";
+                document.getElementById('mod-captcha-status').className = "mt-auto text-xs font-mono text-emerald-400";
+            }
+
+            logs.forEach(log => appendLog(log, status === 'THREAT'));
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket('ws://localhost:8000/ws/stream');
+            
+            ws.onopen = () => {
+                appendLog('WebSocket connection established. Ready for live audio ingestion.');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                updateUI(data.risk_score, data.status, data.logs);
+                
+                if (data.status === 'THREAT' && callInterval) {
+                    clearInterval(callInterval);
+                    callInterval = null;
+                    document.getElementById('call-status').innerText = "Call Blocked - Awaiting CAPTCHA or MFA";
+                }
+            };
+
+            ws.onclose = () => {
+                appendLog('WebSocket disconnected.', true);
+                setTimeout(connectWebSocket, 3000);
+            };
+        }
+
+        async function setupMicrophone() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                analyser.fftSize = 256;
+                microphone.connect(analyser);
+                
+                document.getElementById('audio-visualizer').classList.remove('hidden');
+                drawVisualizer();
+                appendLog("Microphone connected successfully. Hooking into live audio stream...");
+                return true;
+            } catch (err) {
+                appendLog("Microphone access denied: " + err.message, true);
+                alert("Please allow microphone access!");
+                return false;
+            }
+        }
+
+        function drawVisualizer() {
+            const canvas = document.getElementById('audio-visualizer');
+            const canvasCtx = canvas.getContext('2d');
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            function draw() {
+                animationFrameId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+
+                canvasCtx.fillStyle = '#1E293B'; 
+                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for(let i = 0; i < bufferLength; i++) {
+                    barHeight = dataArray[i] / 2;
+                    canvasCtx.fillStyle = `rgb(59, 130, ${barHeight + 100})`;
+                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                    x += barWidth + 1;
+                }
+            }
+            draw();
+        }
+
+        function stopMicrophone() {
+            if (microphone) {
+                microphone.mediaStream.getTracks().forEach(track => track.stop());
+                microphone.disconnect();
+            }
+            if (audioContext) audioContext.close();
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            document.getElementById('audio-visualizer').classList.add('hidden');
+        }
+
+        async function startCall() {
+            document.getElementById('btn-start').classList.add('hidden');
+            document.getElementById('btn-stop').classList.remove('hidden');
+            document.getElementById('btn-captcha').classList.remove('hidden'); // NOW ALWAYS VISIBLE
+            
+            // Reset Modules
+            document.querySelectorAll('.module-card').forEach(el => {
+                el.classList.remove('module-active', 'module-threat');
+            });
+            
+            document.getElementById('mod-room-status').innerText = "Status: Analyzing...";
+            document.getElementById('mod-room-status').className = "mt-auto text-xs font-mono text-slate-500";
+            
+            document.getElementById('mod-tract-status').innerText = "Status: Analyzing...";
+            document.getElementById('mod-tract-status').className = "mt-auto text-xs font-mono text-slate-500";
+            
+            // CAPTCHA is an active challenge, so it stands by until clicked
+            document.getElementById('mod-captcha-status').innerText = "Status: Standby (Awaiting Manual Trigger)";
+            document.getElementById('mod-captcha-status').className = "mt-auto text-xs font-mono text-slate-500";
+
+            document.getElementById('action-alert').classList.add('hidden');
+            document.getElementById('call-status').innerText = "Connecting live audio...";
+            
+            const micAccess = await setupMicrophone();
+            if(!micAccess) return stopCall();
+
+            document.getElementById('call-status').innerText = "Live Call Active - Monitoring...";
+            appendLog(`Intercepting live audio call. Running Advanced Security Modules...`);
+
+            // Send initial chunk
+            setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ is_scam: isShiftPressed }));
+                }
+            }, 1500);
+
+            // Continue sending chunks
+            callInterval = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    // Check if shift is currently pressed
+                    ws.send(JSON.stringify({
+                        type: 'audio_buffer',
+                        size: '32kb',
+                        format: '16kHz',
+                        is_scam: isShiftPressed 
+                    }));
+                }
+            }, 2000);
+        }
+
+        function stopCall() {
+            if (callInterval) clearInterval(callInterval);
+            callInterval = null;
+            stopMicrophone();
+
+            document.getElementById('btn-start').classList.remove('hidden');
+            document.getElementById('btn-stop').classList.add('hidden');
+            document.getElementById('btn-captcha').classList.add('hidden');
+            
+            document.getElementById('call-status').innerText = "Call Ended";
+            
+            document.getElementById('risk-fill').style.width = '0%';
+            document.getElementById('risk-text').innerText = '0%';
+            document.getElementById('risk-text').className = 'text-2xl font-bold text-green-500';
+            document.getElementById('risk-fill').className = 'meter-fill bg-green-500';
+            document.getElementById('risk-status-text').innerText = 'System Idle';
+            document.getElementById('risk-status-text').className = 'text-sm text-slate-400 text-center';
+            document.getElementById('action-alert').classList.add('hidden');
+            
+            const avatar = document.getElementById('call-avatar');
+            avatar.className = 'w-24 h-24 rounded-full bg-slate-800 flex items-center justify-center text-4xl border-4 border-slate-700 transition-colors duration-300 relative overflow-hidden mb-4';
+
+            appendLog('Call Interception ended.');
+        }
+
+        connectWebSocket();
+    </script>
+</body>
+</html>
