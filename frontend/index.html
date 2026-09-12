@@ -11,6 +11,8 @@
         .meter-container { background: #1E293B; border-radius: 9999px; overflow: hidden; height: 1.5rem; }
         .meter-fill { height: 100%; transition: width 0.3s ease, background-color 0.3s ease; }
         .pulse { animation: pulse-glow 2s infinite; }
+        .pulse-ring::before { content: ''; position: absolute; inset: -10px; border-radius: 50%; border: 2px solid #3B82F6; animation: ring 1.5s infinite ease-out; opacity: 0; }
+        @keyframes ring { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.5); opacity: 0; } }
         @keyframes pulse-glow {
             0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
             70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
@@ -24,6 +26,25 @@
 </head>
 <body class="min-h-screen flex flex-col font-sans">
     
+    <!-- Incoming Call Overlay -->
+    <div id="incoming-call-overlay" class="fixed inset-0 bg-slate-950/90 z-50 flex items-center justify-center backdrop-blur-md transition-opacity duration-300 hidden">
+        <div class="bg-slate-900 p-10 rounded-3xl shadow-2xl border border-slate-700 flex flex-col items-center w-96 text-center">
+            <div class="w-32 h-32 rounded-full bg-slate-800 flex items-center justify-center text-6xl mb-8 shadow-[0_0_30px_rgba(59,130,246,0.3)] pulse-ring relative">
+                <i class="fa-solid fa-user text-slate-400 z-10"></i>
+            </div>
+            <h2 class="text-3xl font-bold text-white mb-2">Incoming Call...</h2>
+            <p class="text-slate-400 mb-10 font-mono tracking-wider text-lg">+91 98765 43210</p>
+            
+            <div class="flex gap-12 w-full justify-center">
+                <button onclick="declineCall()" class="w-20 h-20 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-3xl flex items-center justify-center shadow-lg transition-transform hover:scale-110">
+                    <i class="fa-solid fa-phone-slash"></i>
+                </button>
+                <button onclick="acceptCall()" class="w-20 h-20 rounded-full bg-green-600 hover:bg-green-500 text-white text-3xl flex items-center justify-center shadow-lg transition-transform hover:scale-110">
+                    <i class="fa-solid fa-phone"></i>
+                </button>
+            </div>
+        </div>
+    </div>
     <!-- Navbar -->
     <nav class="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shadow-lg">
         <div class="flex items-center gap-3">
@@ -58,7 +79,11 @@
                 </div>
 
                 <div class="flex flex-col gap-3">
-                    <button id="btn-start" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-colors border border-blue-500 shadow-lg" onclick="startCall()">
+                    <button id="btn-simulate" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-lg transition-colors border border-emerald-500 shadow-lg" onclick="simulateIncomingCall()">
+                        <i class="fa-solid fa-phone-volume mr-2"></i> Simulate Incoming Call
+                    </button>
+                    
+                    <button id="btn-start" class="w-full mt-2 bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-colors border border-blue-500 shadow-lg hidden" onclick="startCall()">
                         <i class="fa-solid fa-microphone-lines mr-2"></i> Live Audio Call Monitoring
                     </button>
                     
@@ -160,20 +185,27 @@
     <script>
         let ws;
         let callInterval;
-        let isShiftPressed = false; // SECRET KEY LOGIC
         
         let audioContext;
         let analyser;
         let microphone;
         let animationFrameId;
 
-        // Track Shift key for the secret hackathon trick
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Shift') isShiftPressed = true;
-        });
-        document.addEventListener('keyup', (e) => {
-            if (e.key === 'Shift') isShiftPressed = false;
-        });
+        // FAKE CALL LOGIC
+        function simulateIncomingCall() {
+            document.getElementById('incoming-call-overlay').classList.remove('hidden');
+        }
+
+        function declineCall() {
+            document.getElementById('incoming-call-overlay').classList.add('hidden');
+        }
+
+        function acceptCall() {
+            document.getElementById('incoming-call-overlay').classList.add('hidden');
+            startCall(); // Instantly start the AI monitoring!
+        }
+
+        let currentCallStatus = "SAFE";
 
         function appendLog(message, isAlert=false, colorClass='') {
             const container = document.getElementById('log-container');
@@ -198,8 +230,8 @@
             document.getElementById('mod-captcha-status').className = 'mt-auto text-xs font-mono text-purple-400';
 
             setTimeout(() => {
-                // Determine result based on secret key
-                if (isShiftPressed) {
+                // Fail if the backend Remote Control is currently triggering a threat
+                if (currentCallStatus === "THREAT") {
                     capMod.className = 'module-card bg-slate-800/50 p-4 rounded-lg flex flex-col module-threat';
                     document.getElementById('mod-captcha-status').innerText = "FAILED: AI unable to generate whisper acoustics.";
                     document.getElementById('mod-captcha-status').className = 'mt-auto text-xs font-mono text-rose-400';
@@ -214,6 +246,8 @@
         }
 
         function updateUI(riskScore, status, logs) {
+            currentCallStatus = status;
+            
             const riskFill = document.getElementById('risk-fill');
             const riskText = document.getElementById('risk-text');
             const riskStatusText = document.getElementById('risk-status-text');
@@ -360,6 +394,7 @@
         }
 
         async function startCall() {
+            document.getElementById('btn-simulate').classList.add('hidden');
             document.getElementById('btn-start').classList.add('hidden');
             document.getElementById('btn-stop').classList.remove('hidden');
             document.getElementById('btn-captcha').classList.remove('hidden'); // NOW ALWAYS VISIBLE
@@ -391,19 +426,18 @@
             // Send initial chunk
             setTimeout(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ is_scam: isShiftPressed }));
+                    ws.send(JSON.stringify({ is_scam: false }));
                 }
             }, 1500);
 
             // Continue sending chunks
             callInterval = setInterval(() => {
                 if (ws && ws.readyState === WebSocket.OPEN) {
-                    // Check if shift is currently pressed
                     ws.send(JSON.stringify({
                         type: 'audio_buffer',
                         size: '32kb',
                         format: '16kHz',
-                        is_scam: isShiftPressed 
+                        is_scam: false 
                     }));
                 }
             }, 2000);
@@ -414,7 +448,8 @@
             callInterval = null;
             stopMicrophone();
 
-            document.getElementById('btn-start').classList.remove('hidden');
+            document.getElementById('btn-simulate').classList.remove('hidden');
+            document.getElementById('btn-start').classList.add('hidden');
             document.getElementById('btn-stop').classList.add('hidden');
             document.getElementById('btn-captcha').classList.add('hidden');
             
